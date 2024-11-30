@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react'; // Added React import
+import './globals.css';
 
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Button } from './components/ui/button';
+import { cn } from './lib/utils';
 import { VariantProps, cva } from 'class-variance-authority';
 import {
     Locale,
@@ -44,7 +45,7 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
     DropdownMenuCheckboxItem,
-} from "@/components/ui/dropdown-menu";
+} from "./components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react"; // Assuming you're using lucide-react for icons
 
 const monthEventVariants = cva('size-2 rounded-full', {
