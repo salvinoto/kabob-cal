@@ -2,6 +2,8 @@
 
 A modern, flexible, and customizable calendar component library for React applications. Built with TypeScript and featuring multiple view modes, person management, and event handling capabilities.
 
+![Kabob Calendar Preview](./assets/calendar-overview.png)
+
 ## Features
 
 - 📅 Multiple calendar views (Day, Week, Month, Year)
