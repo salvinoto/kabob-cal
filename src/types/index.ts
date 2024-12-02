@@ -36,6 +36,7 @@ export type ContextType = {
     selectedPersonIds: string[];
     setSelectedPersonIds: (ids: string[]) => void;
     onAddAppointment?: (date: Date) => void;
+    onUpdateEvent?: (event: CalendarEvent) => void;
 };
 
 export type CalendarProps = {
@@ -50,4 +51,5 @@ export type CalendarProps = {
     people: Person[];
     defaultSelectedPersonIds?: string[];
     onAddAppointment?: (date: Date) => void;
+    onUpdateEvent?: (event: CalendarEvent) => void;
 };
