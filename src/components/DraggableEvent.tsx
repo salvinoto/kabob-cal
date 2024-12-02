@@ -23,13 +23,17 @@ export function DraggableEvent({ event, person, view, style }: DraggableEventPro
     } = useSortable({
         id: event.id,
         data: { event },
+        strategy: undefined
     });
 
     const dragStyle: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
-        transition,
+        transition: isDragging ? undefined : transition,
         opacity: isDragging ? 0.5 : 1,
         cursor: 'grab',
+        zIndex: isDragging ? 50 : 1,
+        touchAction: 'none',
+        userSelect: 'none',
         ...style,
     };
 
@@ -40,7 +44,9 @@ export function DraggableEvent({ event, person, view, style }: DraggableEventPro
                 style={dragStyle}
                 {...attributes}
                 {...listeners}
-                className="px-1 rounded text-sm flex items-center gap-1"
+                className="px-1 rounded text-sm flex items-center gap-1 select-none touch-none"
+                data-id={event.id}
+                data-type="event"
             >
                 <div
                     className={cn(
@@ -64,12 +70,17 @@ export function DraggableEvent({ event, person, view, style }: DraggableEventPro
             {...attributes}
             {...listeners}
             className={cn(
-                'relative',
+                'relative select-none touch-none',
                 dayEventVariants({ variant: person?.color || event.color })
             )}
+            data-id={event.id}
+            data-type="event"
         >
             <div className="text-xs font-semibold">{event.title}</div>
             <div className="text-xs">{person?.name}</div>
+            <time className="text-xs opacity-75">
+                {format(event.start, 'HH:mm')} - {format(event.end, 'HH:mm')}
+            </time>
         </div>
     );
 } 
