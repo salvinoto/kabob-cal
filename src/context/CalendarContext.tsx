@@ -19,6 +19,7 @@ const CalendarContext = createContext<ContextType>({
     onEventClick: () => {},
     enableHotkeys: true,
     onAddAppointment: () => {},
+    onUpdateEvent: () => {},
 });
 
 function useCalendar() {
@@ -41,6 +42,7 @@ type CalendarProviderProps = {
     people: Person[];
     defaultSelectedPersonIds?: string[];
     onAddAppointment?: (date: Date) => void;
+    onUpdateEvent?: (event: CalendarEvent) => void;
 };
 
 function CalendarProvider({
@@ -55,6 +57,7 @@ function CalendarProvider({
     people,
     defaultSelectedPersonIds = [],
     onAddAppointment,
+    onUpdateEvent,
 }: CalendarProviderProps) {
     const [view, setView] = useState<View>(defaultView);
     const [date, setDate] = useState(defaultDate);
@@ -77,6 +80,7 @@ function CalendarProvider({
         selectedPersonIds,
         setSelectedPersonIds,
         onAddAppointment,
+        onUpdateEvent,
     };
 
     return (

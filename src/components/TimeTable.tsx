@@ -1,36 +1,45 @@
 import { ReactNode } from 'react';
+import { DroppableHourSlot } from './DroppableHourSlot';
+import { setHours, isToday } from 'date-fns';
 
 interface TimeTableProps {
-    children: ReactNode;
+    onTimeClick?: (hour: Date) => void;
+    showCurrentTime?: boolean;
 }
 
-export const TimeTable = () => {
+export const TimeTable = ({ onTimeClick, showCurrentTime }: TimeTableProps) => {
     const now = new Date();
+    const hours = Array.from(Array(24).keys()).map(hour => setHours(now, hour));
 
     return (
-        <div className="pr-2 w-12">
-            {Array.from(Array(25).keys()).map((hour) => {
-                return (
+        <div className="flex flex-1">
+            {/* Time labels column */}
+            <div className="pr-2 w-12 relative">
+                {hours.map((hour) => (
                     <div
-                        className="text-right relative text-xs text-muted-foreground/50 h-20 last:h-0"
-                        key={hour}
+                        key={`label-${hour.getHours()}`}
+                        className="h-20 relative text-xs text-muted-foreground/50"
                     >
-                        {now.getHours() === hour && (
-                            <div
-                                className="absolute z- left-full translate-x-2 w-dvw h-[2px] bg-red-500"
-                                style={{
-                                    top: `${(now.getMinutes() / 60) * 100}%`,
-                                }}
-                            >
-                                <div className="size-2 rounded-full bg-red-500 absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"></div>
-                            </div>
-                        )}
-                        <p className="top-0 -translate-y-1/2">
-                            {hour === 24 ? 0 : hour}:00
-                        </p>
+                        <div className="absolute -top-2 right-0">
+                            {hour.getHours()}:00
+                        </div>
                     </div>
-                );
-            })}
+                ))}
+            </div>
+
+            {/* Droppable time slots */}
+            <div className="flex-1 relative">
+                {hours.map((hour) => (
+                    <DroppableHourSlot
+                        key={hour.toString()}
+                        hour={hour}
+                        isToday={isToday(hour)}
+                        onTimeClick={onTimeClick || (() => {})}
+                        className="hover:bg-muted/20"
+                        showCurrentTime={showCurrentTime}
+                    />
+                ))}
+            </div>
         </div>
     );
 };

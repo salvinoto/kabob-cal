@@ -4,58 +4,63 @@ import 'kabob-cal/dist/globals.css';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const App = () => {
-  // Sample people data
+  // Define people (e.g., doctors)
   const people: Person[] = [
     {
       id: 'doctor1',
       name: 'Dr. Smith',
-      color: 'blue' // indigo color
+      color: 'blue'
     },
     {
       id: 'doctor2',
       name: 'Dr. Johnson',
-      color: 'pink' // red color
+      color: 'pink'
     }
   ];
 
-  // Sample appointments/events
-  const events: CalendarEvent[] = [
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(today);
+  const [events, setEvents] = useState<CalendarEvent[]>([
     {
       id: '1',
       title: 'Annual Checkup',
-      start: new Date(2024, 0, 15, 10, 0), // Jan 15, 2024, 10:00 AM
-      end: new Date(2024, 0, 15, 11, 0),   // Jan 15, 2024, 11:00 AM
+      start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0),
+      end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 11, 0),
       personId: 'doctor1'
     },
     {
       id: '2',
       title: 'Dental Cleaning',
-      start: new Date(2024, 0, 15, 14, 30), // Jan 15, 2024, 2:30 PM
-      end: new Date(2024, 0, 15, 15, 30),   // Jan 15, 2024, 3:30 PM
+      start: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14, 30),
+      end: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 15, 30),
       personId: 'doctor2'
-    },
-    {
-      id: '3',
-      title: 'Follow-up Visit',
-      start: new Date(2024, 0, 16, 9, 0),   // Jan 16, 2024, 9:00 AM
-      end: new Date(2024, 0, 16, 9, 30),    // Jan 16, 2024, 9:30 AM
-      personId: 'doctor1'
     }
-  ];
+  ]);
 
   const handleEventClick = (event: CalendarEvent) => {
     console.log('Appointment clicked:', event);
   };
 
   const handleAddAppointment = (date: Date) => {
-    console.log('Add appointment clicked for date:', date);
+    const newEvent: CalendarEvent = {
+      id: String(Date.now()),
+      title: 'New Appointment',
+      start: date,
+      end: new Date(date.getTime() + 60 * 60 * 1000), // 1 hour duration
+      personId: people[0].id
+    };
+
+    setEvents(prevEvents => [...prevEvents, newEvent]);
   };
 
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1)); // Initial fixed date
-
-  useEffect(() => {
-    setCurrentDate(new Date()); // Update to current date after mount
-  }, []);
+  const handleUpdateEvent = (updatedEvent: CalendarEvent) => {
+    console.log('Updating event:', updatedEvent);
+    setEvents(prevEvents => 
+      prevEvents.map(event => 
+        event.id === updatedEvent.id ? updatedEvent : event
+      )
+    );
+  };
 
   return (
     <div className="h-screen w-full p-4 bg-white">
@@ -65,10 +70,11 @@ const App = () => {
         people={people}
         defaultSelectedPersonIds={['doctor1', 'doctor2']}
         onAddAppointment={handleAddAppointment}
+        onEventClick={handleEventClick}
+        onUpdateEvent={handleUpdateEvent}
       >
         <div className="flex h-full flex-col space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Person selector and view controls */}
             <div className="flex flex-wrap justify-center items-center gap-2 w-full sm:w-auto">
               <CalendarPersonSelector className="w-full sm:w-auto" />
               <div className="flex flex-wrap justify-center items-center gap-1">
@@ -99,7 +105,6 @@ const App = () => {
               </div>
             </div>
 
-            {/* Navigation controls */}
             <div className="flex flex-wrap justify-center items-center gap-2 w-full sm:w-auto sm:justify-end">
               <CalendarCurrentDate className="text-center sm:text-right min-w-24" />
               <div className="flex items-center gap-1">
