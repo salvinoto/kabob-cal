@@ -12,6 +12,7 @@ import {
     DragOverlay
 } from '@dnd-kit/core';
 import { CalendarEvent } from '../../types';
+import { useState } from 'react';
 
 export const CalendarDayView = () => {
     const { 
@@ -25,6 +26,8 @@ export const CalendarDayView = () => {
         setEvents 
     } = useCalendar();
 
+    const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
+
     const handleTimeClick = (hour: Date) => {
         onAddAppointment?.(hour);
     };
@@ -32,49 +35,43 @@ export const CalendarDayView = () => {
     const calculateTimeFromYPosition = (y: number, containerRect: DOMRect, scrollTop: number = 0) => {
         const hourHeight = 80; // height of each hour block in pixels
         const relativeY = y - containerRect.top + scrollTop;
-        const totalHours = relativeY / hourHeight;
-        const hours = Math.floor(totalHours);
-        const minutes = Math.floor((totalHours - hours) * 60);
+        const totalMinutes = Math.floor((relativeY / hourHeight) * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
         return { hours, minutes };
     };
 
     const handleDragStart = (event: DragStartEvent) => {
-        console.log('Drag start:', event);
+        const { active } = event;
+        const draggedEvent = active.data.current?.event as CalendarEvent;
+        if (draggedEvent) {
+            setActiveEvent(draggedEvent);
+        }
     };
 
     const handleDragOver = (event: DragOverEvent) => {
-        console.log('Drag over:', event);
+        // Optional: Add any drag over effects if needed
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
+        setActiveEvent(null);
         
-        if (!active.data.current) return;
+        if (!active.data.current?.event || !over?.data.current) return;
         
         const draggedEvent = active.data.current.event as CalendarEvent;
-        const duration = draggedEvent.end.getTime() - draggedEvent.start.getTime();
-
-        // Get the container and scroll position
-        const container = document.querySelector('.overflow-auto');
-        if (!container) return;
+        const dropData = over.data.current as { hour: number };
         
-        const containerRect = container.getBoundingClientRect();
-        const scrollTop = container.scrollTop;
+        if (typeof dropData.hour !== 'number') return;
 
-        // Calculate new time based on pointer position
-        const pointerPosition = event.activatorEvent as PointerEvent;
-        const { hours, minutes } = calculateTimeFromYPosition(
-            pointerPosition.clientY,
-            containerRect,
-            scrollTop
+        const duration = draggedEvent.end.getTime() - draggedEvent.start.getTime();
+        const originalMinutes = draggedEvent.start.getMinutes();
+
+        // Create new start date while preserving the original date and minutes
+        const newStart = setMinutes(
+            setHours(startOfDay(draggedEvent.start), dropData.hour),
+            originalMinutes
         );
-
-        // Ensure hours are within 0-23 range and minutes within 0-59
-        const clampedHours = Math.max(0, Math.min(23, hours));
-        const clampedMinutes = Math.max(0, Math.min(59, minutes));
-
-        // Create new start date
-        const newStart = setMinutes(setHours(date, clampedHours), clampedMinutes);
         const newEnd = new Date(newStart.getTime() + duration);
 
         // Update the event
@@ -83,13 +80,6 @@ export const CalendarDayView = () => {
             start: newStart,
             end: newEnd,
         };
-
-        console.log('Updating event:', {
-            originalStart: draggedEvent.start,
-            newStart,
-            originalEnd: draggedEvent.end,
-            newEnd,
-        });
 
         setEvents(events.map(e => e.id === draggedEvent.id ? updatedEvent : e));
         onUpdateEvent?.(updatedEvent);
@@ -102,58 +92,55 @@ export const CalendarDayView = () => {
 
     return (
         <DndContext
-            collisionDetection={pointerWithin}
+            onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
         >
-            <div className="flex relative pt-2 overflow-auto h-full">
-                <TimeTable />
-                <div className="flex-1">
-                    {hours.map((hour) => (
-                        <div
-                            key={hour.toString()}
-                            className="relative"
-                            onClick={() => handleTimeClick(hour)}
-                            role="button"
-                            tabIndex={0}
-                            id={hour.toISOString()}
-                            data-type="hour"
-                        >
-                            <div className="h-20 border-t last:border-b">
-                                {events
-                                    .filter(
-                                        (event) =>
-                                            isSameDay(event.start, dayStart) &&
-                                            isSameHour(event.start, hour) &&
-                                            selectedPersonIds.includes(event.personId)
-                                    )
-                                    .map((event) => {
-                                        const person = people.find((p) => p.id === event.personId);
-                                        const startMinutes = event.start.getMinutes();
-                                        const duration = (event.end.getTime() - event.start.getTime()) / (60 * 60 * 1000);
-                                        
-                                        return (
-                                            <DraggableEvent
-                                                key={event.id}
-                                                event={event}
-                                                person={person}
-                                                view="day"
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: `${(startMinutes / 60) * 100}%`,
-                                                    left: 0,
-                                                    right: 0,
-                                                    height: `${duration * 100}%`,
-                                                }}
-                                            />
-                                        );
-                                    })}
-                            </div>
-                        </div>
-                    ))}
+            <div className="flex flex-1 overflow-hidden relative">
+                <TimeTable onTimeClick={handleTimeClick} />
+                <div className="absolute inset-0 left-12 pointer-events-none">
+                    {events
+                        .filter((event) => isSameDay(event.start, date))
+                        .map((event) => {
+                            const person = people?.find((p) => p.id === event.personId);
+                            const startHour = event.start.getHours();
+                            const duration = differenceInMinutes(event.end, event.start);
+                            // Position events at the start of the hour slot
+                            const top = (startHour * 80) + ((event.start.getMinutes() / 60) * 80);
+                            const height = (duration / 60) * 80;
+
+                            return (
+                                <DraggableEvent
+                                    key={event.id}
+                                    event={event}
+                                    person={person}
+                                    view="day"
+                                    style={{
+                                        position: 'absolute',
+                                        top: `${top}px`,
+                                        height: `${height}px`,
+                                        width: 'calc(100% - 16px)',
+                                        left: 8,
+                                        pointerEvents: 'auto',
+                                    }}
+                                />
+                            );
+                        })}
                 </div>
             </div>
+            <DragOverlay>
+                {activeEvent ? (
+                    <DraggableEvent
+                        event={activeEvent}
+                        person={people?.find((p) => p.id === activeEvent.personId)}
+                        view="day"
+                        style={{
+                            width: 'calc(100% - 16px)',
+                            height: `${(differenceInMinutes(activeEvent.end, activeEvent.start) / 60) * 80}px`,
+                        }}
+                    />
+                ) : null}
+            </DragOverlay>
         </DndContext>
     );
 };
