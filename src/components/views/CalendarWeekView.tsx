@@ -1,10 +1,20 @@
+import { useState } from 'react';
 import { useCalendar } from '../../context/CalendarContext';
-import { format, startOfWeek, addDays, isToday, setHours, isSameDay, isSameHour, setMinutes, startOfDay } from 'date-fns';
+import { format, startOfWeek, addDays, isToday, setHours, isSameDay, isSameHour, setMinutes, startOfDay, differenceInMinutes } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { TimeTable } from '../TimeTable';
 import { useMemo } from 'react';
 import { DraggableEvent } from '../DraggableEvent';
-import { DndContext, DragEndEvent, closestCenter, DragStartEvent, DragOverEvent } from '@dnd-kit/core';
+import { 
+    DndContext, 
+    DragEndEvent, 
+    closestCenter, 
+    DragStartEvent, 
+    DragOverEvent,
+    pointerWithin,
+    DragOverlay,
+    useDroppable
+} from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CalendarEvent } from '../../types';
 
@@ -20,6 +30,8 @@ export const CalendarWeekView = () => {
         onUpdateEvent,
         setEvents 
     } = useCalendar();
+
+    const [activeEvent, setActiveEvent] = useState<CalendarEvent | null>(null);
 
     const weekDates = useMemo(() => {
         const start = startOfWeek(date, { weekStartsOn: 0 });
@@ -47,40 +59,39 @@ export const CalendarWeekView = () => {
         onAddAppointment?.(date);
     };
 
-    const calculateTimeFromYPosition = (y: number, containerRect: DOMRect) => {
-        const hourHeight = 80; // height of each hour block in pixels
-        const scrollTop = containerRect.top;
-        const relativeY = y - scrollTop;
-        const totalMinutes = (relativeY / hourHeight) * 60;
-        return Math.max(0, Math.min(totalMinutes, 24 * 60 - 1)); // Clamp between 0 and 23:59
-    };
-
     const handleDragStart = (event: DragStartEvent) => {
-        console.log('Week view - Drag start:', event);
+        const { active } = event;
+        const draggedEvent = active.data.current?.event as CalendarEvent;
+        if (draggedEvent) {
+            setActiveEvent(draggedEvent);
+        }
     };
 
     const handleDragOver = (event: DragOverEvent) => {
-        console.log('Week view - Drag over:', event);
+        // Optional: Add any drag over effects if needed
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        console.log('Week view - Drag end:', event);
         const { active, over } = event;
+        setActiveEvent(null);
         
-        if (!over || !active.data.current) return;
+        if (!active.data.current?.event || !over?.data.current) return;
         
         const draggedEvent = active.data.current.event as CalendarEvent;
-        const hourElement = document.getElementById(over.id as string);
-        if (!hourElement) return;
+        const dropData = over.data.current as { hour: number; date: Date };
+        
+        if (typeof dropData.hour !== 'number' || !dropData.date) return;
 
-        const containerRect = hourElement.getBoundingClientRect();
-        const minutes = calculateTimeFromYPosition(event.over?.rect.top ?? 0, containerRect);
-        
-        // Calculate new times
         const duration = draggedEvent.end.getTime() - draggedEvent.start.getTime();
-        const newStart = setMinutes(setHours(new Date(over.id), 0), minutes);
+        const originalMinutes = draggedEvent.start.getMinutes();
+
+        // Create new start date while preserving the minutes
+        const newStart = setMinutes(
+            setHours(startOfDay(dropData.date), dropData.hour),
+            originalMinutes
+        );
         const newEnd = new Date(newStart.getTime() + duration);
-        
+
         // Check for collisions in the same day
         const collidingEvents = events.filter(e => 
             e.id !== draggedEvent.id &&
@@ -124,6 +135,7 @@ export const CalendarWeekView = () => {
                 end: newEnd,
             };
             
+            setEvents(events.map(e => e.id === draggedEvent.id ? updatedEvent : e));
             onUpdateEvent?.(updatedEvent);
         }
     };
@@ -138,6 +150,7 @@ export const CalendarWeekView = () => {
             onDragEnd={handleDragEnd}
         >
             <div className="flex flex-col relative overflow-auto h-full">
+                {/* Header */}
                 <div className="flex sticky top-0 bg-card z-10 border-b mb-3">
                     <div className="w-12"></div>
                     {headerDays.map((date, i) => (
@@ -151,7 +164,7 @@ export const CalendarWeekView = () => {
                             {format(date, 'E', { locale })}
                             <span
                                 className={cn(
-                                    'h-6 grid place-content-center',
+                                    'h-6 grid place-content-center ml-1',
                                     isToday(date) &&
                                     'bg-primary text-primary-foreground rounded-full size-6'
                                 )}
@@ -161,69 +174,113 @@ export const CalendarWeekView = () => {
                         </div>
                     ))}
                 </div>
+
+                {/* Time grid */}
                 <div className="flex flex-1">
-                    <div className="w-fit">
-                        <TimeTable />
+                    <div className="w-12">
+                        <TimeTable onTimeClick={handleTimeClick} />
                     </div>
-                    <div className="grid grid-cols-7 flex-1">
-                        <SortableContext items={events.map(e => e.id)} strategy={rectSortingStrategy}>
-                            {weekDates.map((hours, i) => (
-                                <div
-                                    className={cn(
-                                        'h-full text-sm text-muted-foreground border-l first:border-l-0',
-                                        [0, 6].includes(i) && 'bg-muted/50'
-                                    )}
-                                    key={hours[0].toString()}
-                                >
-                                    {hours.map((hour) => {
-                                        const dayStart = startOfDay(hour);
-                                        const hourEvents = events.filter(
-                                            (event) => 
-                                                isSameDay(event.start, dayStart) && 
-                                                isSameHour(event.start, hour) &&
-                                                selectedPersonIds.includes(event.personId)
-                                        );
-                                        
-                                        return (
-                                            <div
-                                                key={hour.toString()}
-                                                onClick={() => handleTimeClick(hour)}
-                                                className="relative h-20"
-                                                role="button"
-                                                tabIndex={0}
-                                                id={hour.toISOString()}
-                                                data-type="hour"
-                                            >
-                                                {hourEvents.map((event) => {
-                                                    const person = people.find((p) => p.id === event.personId);
-                                                    const startMinutes = event.start.getMinutes();
-                                                    const duration = (event.end.getTime() - event.start.getTime()) / (60 * 60 * 1000);
-                                                    
-                                                    return (
-                                                        <DraggableEvent
-                                                            key={event.id}
-                                                            event={event}
-                                                            person={person}
-                                                            view="week"
-                                                            style={{
-                                                                position: 'absolute',
-                                                                top: `${(startMinutes / 60) * 100}%`,
-                                                                left: 0,
-                                                                right: 0,
-                                                                height: `${duration * 100}%`,
-                                                            }}
-                                                        />
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </SortableContext>
+                    <div className="grid flex-1 grid-cols-7">
+                        {weekDates.map((hours, dayIndex) => (
+                            <div
+                                key={hours[0].toString()}
+                                className={cn(
+                                    'relative border-l first:border-l-0',
+                                    [0, 6].includes(dayIndex) && 'bg-muted/5'
+                                )}
+                            >
+                                {hours.map((hour) => {
+                                    const hourEvents = events.filter(event => 
+                                        isSameDay(event.start, hour) && 
+                                        isSameHour(event.start, hour) &&
+                                        selectedPersonIds.includes(event.personId)
+                                    );
+
+                                    return (
+                                        <DroppableHourSlot 
+                                            key={hour.toString()} 
+                                            hour={hour}
+                                            isToday={isToday(hour)}
+                                            onTimeClick={handleTimeClick}
+                                        >
+                                            {hourEvents.map(event => {
+                                                const person = people.find(p => p.id === event.personId);
+                                                const startMinutes = event.start.getMinutes();
+                                                const duration = differenceInMinutes(event.end, event.start) / 60;
+                                                
+                                                return (
+                                                    <DraggableEvent
+                                                        key={event.id}
+                                                        event={event}
+                                                        person={person}
+                                                        view="week"
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: `${(startMinutes / 60) * 80}px`,
+                                                            left: '4px',
+                                                            right: '4px',
+                                                            height: `${duration * 80}px`,
+                                                            pointerEvents: 'auto',
+                                                        }}
+                                                    />
+                                                );
+                                            })}
+                                        </DroppableHourSlot>
+                                    );
+                                })}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
+            <DragOverlay>
+                {activeEvent ? (
+                    <DraggableEvent
+                        event={activeEvent}
+                        person={people?.find((p) => p.id === activeEvent.personId)}
+                        view="week"
+                        style={{
+                            width: '100%',
+                            height: `${(differenceInMinutes(activeEvent.end, activeEvent.start) / 60) * 80}px`,
+                            pointerEvents: 'none',
+                            opacity: 0.8,
+                        }}
+                    />
+                ) : null}
+            </DragOverlay>
         </DndContext>
+    );
+};
+
+interface DroppableHourSlotProps {
+    hour: Date;
+    isToday: boolean;
+    onTimeClick: (hour: Date) => void;
+    children?: React.ReactNode;
+}
+
+const DroppableHourSlot = ({ hour, isToday, onTimeClick, children }: DroppableHourSlotProps) => {
+    const { setNodeRef, isOver } = useDroppable({
+        id: hour.toString(),
+        data: { hour: hour.getHours(), date: hour }
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            id={hour.toString()}
+            className={cn(
+                'h-20 border-t border-border relative group transition-colors',
+                isToday && 'bg-muted/5',
+                isOver && 'bg-muted/20'
+            )}
+            onClick={() => onTimeClick(hour)}
+            data-hour={hour.getHours()}
+            style={{
+                zIndex: isOver ? 10 : 'auto'
+            }}
+        >
+            {children}
+        </div>
     );
 };
