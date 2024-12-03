@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { TimeTable } from '../TimeTable';
 import { useMemo } from 'react';
 import { DraggableEvent } from '../DraggableEvent';
+import { DroppableHourSlot } from '../DroppableHourSlot';
 import { 
     DndContext, 
     DragEndEvent, 
@@ -178,7 +179,7 @@ export const CalendarWeekView = () => {
                 {/* Time grid */}
                 <div className="flex flex-1">
                     <div className="w-12">
-                        <TimeTable onTimeClick={handleTimeClick} />
+                        <TimeTable onTimeClick={handleTimeClick} showCurrentTime={true} />
                     </div>
                     <div className="grid flex-1 grid-cols-7">
                         {weekDates.map((hours, dayIndex) => (
@@ -249,38 +250,5 @@ export const CalendarWeekView = () => {
                 ) : null}
             </DragOverlay>
         </DndContext>
-    );
-};
-
-interface DroppableHourSlotProps {
-    hour: Date;
-    isToday: boolean;
-    onTimeClick: (hour: Date) => void;
-    children?: React.ReactNode;
-}
-
-const DroppableHourSlot = ({ hour, isToday, onTimeClick, children }: DroppableHourSlotProps) => {
-    const { setNodeRef, isOver } = useDroppable({
-        id: hour.toString(),
-        data: { hour: hour.getHours(), date: hour }
-    });
-
-    return (
-        <div
-            ref={setNodeRef}
-            id={hour.toString()}
-            className={cn(
-                'h-20 border-t border-border relative group transition-colors',
-                isToday && 'bg-muted/5',
-                isOver && 'bg-muted/20'
-            )}
-            onClick={() => onTimeClick(hour)}
-            data-hour={hour.getHours()}
-            style={{
-                zIndex: isOver ? 10 : 'auto'
-            }}
-        >
-            {children}
-        </div>
     );
 };

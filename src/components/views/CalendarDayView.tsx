@@ -3,6 +3,7 @@ import { TimeTable } from '../TimeTable';
 import { setHours, isSameHour, differenceInMinutes, setMinutes, startOfDay, isSameDay } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { DraggableEvent } from '../DraggableEvent';
+import { DroppableHourSlot } from '../DroppableHourSlot';
 import { 
     DndContext, 
     DragEndEvent, 
@@ -97,35 +98,45 @@ export const CalendarDayView = () => {
             onDragOver={handleDragOver}
         >
             <div className="flex flex-1 overflow-hidden relative">
-                <TimeTable onTimeClick={handleTimeClick} />
+                <TimeTable onTimeClick={handleTimeClick} showCurrentTime={true} />
                 <div className="absolute inset-0 left-12 pointer-events-none">
-                    {events
-                        .filter((event) => isSameDay(event.start, date))
-                        .map((event) => {
-                            const person = people?.find((p) => p.id === event.personId);
-                            const startHour = event.start.getHours();
-                            const duration = differenceInMinutes(event.end, event.start);
-                            // Position events at the start of the hour slot
-                            const top = (startHour * 80) + ((event.start.getMinutes() / 60) * 80);
-                            const height = (duration / 60) * 80;
-
-                            return (
-                                <DraggableEvent
-                                    key={event.id}
-                                    event={event}
-                                    person={person}
-                                    view="day"
-                                    style={{
-                                        position: 'absolute',
-                                        top: `${top}px`,
-                                        height: `${height}px`,
-                                        width: 'calc(100% - 16px)',
-                                        left: 8,
-                                        pointerEvents: 'auto',
-                                    }}
-                                />
-                            );
-                        })}
+                    {hours.map((hour) => (
+                        <DroppableHourSlot
+                            key={hour.toString()}
+                            hour={hour}
+                            isToday={isSameDay(hour, date)}
+                            onTimeClick={handleTimeClick}
+                            className="pointer-events-auto"
+                        >
+                            {events
+                                .filter((event) => 
+                                    isSameDay(event.start, hour) && 
+                                    isSameHour(event.start, hour)
+                                )
+                                .map((event) => {
+                                    const person = people?.find((p) => p.id === event.personId);
+                                    const startMinutes = event.start.getMinutes();
+                                    const duration = differenceInMinutes(event.end, event.start);
+                                    
+                                    return (
+                                        <DraggableEvent
+                                            key={event.id}
+                                            event={event}
+                                            person={person}
+                                            view="day"
+                                            style={{
+                                                position: 'absolute',
+                                                top: `${(startMinutes / 60) * 80}px`,
+                                                height: `${(duration / 60) * 80}px`,
+                                                width: 'calc(100% - 16px)',
+                                                left: 8,
+                                                pointerEvents: 'auto',
+                                            }}
+                                        />
+                                    );
+                                })}
+                        </DroppableHourSlot>
+                    ))}
                 </div>
             </div>
             <DragOverlay>
@@ -137,6 +148,7 @@ export const CalendarDayView = () => {
                         style={{
                             width: 'calc(100% - 16px)',
                             height: `${(differenceInMinutes(activeEvent.end, activeEvent.start) / 60) * 80}px`,
+                            pointerEvents: 'none',
                         }}
                     />
                 ) : null}

@@ -10,6 +10,7 @@ export { CalendarViewTrigger } from './components/CalendarViewTrigger';
 export { CalendarWeekView } from './components/views/CalendarWeekView';
 export { CalendarYearView } from './components/views/CalendarYearView';
 export { DraggableEvent } from './components/DraggableEvent';
+export { DroppableHourSlot } from './components/DroppableHourSlot';
 
 // Types
 export type { CalendarEvent, Person, View } from './types'; 
