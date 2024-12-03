@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 
 interface TimeTableProps {
-    children: ReactNode;
+    children?: ReactNode;
 }
 
 export const TimeTable = () => {
@@ -10,14 +11,20 @@ export const TimeTable = () => {
     return (
         <div className="pr-2 w-12">
             {Array.from(Array(25).keys()).map((hour) => {
+                const { setNodeRef } = useDroppable({
+                    id: `time-${hour}`,
+                    data: { hour }
+                });
+
                 return (
                     <div
+                        ref={setNodeRef}
                         className="text-right relative text-xs text-muted-foreground/50 h-20 last:h-0"
                         key={hour}
                     >
                         {now.getHours() === hour && (
                             <div
-                                className="absolute z- left-full translate-x-2 w-dvw h-[2px] bg-red-500"
+                                className="absolute z-10 left-full translate-x-2 w-dvw h-[2px] bg-red-500"
                                 style={{
                                     top: `${(now.getMinutes() / 60) * 100}%`,
                                 }}

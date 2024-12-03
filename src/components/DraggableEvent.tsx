@@ -1,4 +1,4 @@
-import { useSortable } from '@dnd-kit/sortable';
+import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { CalendarEvent, Person } from '../types';
 import { cn } from '../lib/utils';
@@ -18,17 +18,14 @@ export function DraggableEvent({ event, person, view, style }: DraggableEventPro
         listeners,
         setNodeRef,
         transform,
-        transition,
         isDragging,
-    } = useSortable({
+    } = useDraggable({
         id: event.id,
-        data: { event },
-        strategy: undefined
+        data: { event }
     });
 
     const dragStyle: React.CSSProperties = {
-        transform: CSS.Transform.toString(transform),
-        transition: isDragging ? undefined : transition,
+        transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.5 : 1,
         cursor: 'grab',
         zIndex: isDragging ? 50 : 1,

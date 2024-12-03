@@ -3,8 +3,14 @@ import { TimeTable } from '../TimeTable';
 import { setHours, isSameHour, differenceInMinutes, setMinutes, startOfDay, isSameDay } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { DraggableEvent } from '../DraggableEvent';
-import { DndContext, DragEndEvent, closestCenter, DragStartEvent, DragOverEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+import { 
+    DndContext, 
+    DragEndEvent, 
+    DragStartEvent, 
+    DragOverEvent, 
+    pointerWithin,
+    DragOverlay
+} from '@dnd-kit/core';
 import { CalendarEvent } from '../../types';
 
 export const CalendarDayView = () => {
@@ -23,12 +29,13 @@ export const CalendarDayView = () => {
         onAddAppointment?.(hour);
     };
 
-    const calculateTimeFromYPosition = (y: number, containerRect: DOMRect) => {
+    const calculateTimeFromYPosition = (y: number, containerRect: DOMRect, scrollTop: number = 0) => {
         const hourHeight = 80; // height of each hour block in pixels
-        const scrollTop = containerRect.top;
-        const relativeY = y - scrollTop;
-        const totalMinutes = (relativeY / hourHeight) * 60;
-        return Math.max(0, Math.min(totalMinutes, 24 * 60 - 1)); // Clamp between 0 and 23:59
+        const relativeY = y - containerRect.top + scrollTop;
+        const totalHours = relativeY / hourHeight;
+        const hours = Math.floor(totalHours);
+        const minutes = Math.floor((totalHours - hours) * 60);
+        return { hours, minutes };
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -40,67 +47,52 @@ export const CalendarDayView = () => {
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        console.log('Drag end:', event);
         const { active, over } = event;
         
-        if (!over || !active.data.current) return;
+        if (!active.data.current) return;
         
         const draggedEvent = active.data.current.event as CalendarEvent;
-        const hourElement = document.getElementById(over.id as string);
-        if (!hourElement) return;
-
-        const containerRect = hourElement.getBoundingClientRect();
-        const minutes = calculateTimeFromYPosition(event.over?.rect.top ?? 0, containerRect);
-        
-        // Calculate new times
         const duration = draggedEvent.end.getTime() - draggedEvent.start.getTime();
-        const newStart = setMinutes(setHours(new Date(over.id), 0), minutes);
-        const newEnd = new Date(newStart.getTime() + duration);
+
+        // Get the container and scroll position
+        const container = document.querySelector('.overflow-auto');
+        if (!container) return;
         
-        // Check for collisions
-        const collidingEvents = events.filter(e => 
-            e.id !== draggedEvent.id &&
-            e.start.getTime() < newEnd.getTime() &&
-            e.end.getTime() > newStart.getTime()
+        const containerRect = container.getBoundingClientRect();
+        const scrollTop = container.scrollTop;
+
+        // Calculate new time based on pointer position
+        const pointerPosition = event.activatorEvent as PointerEvent;
+        const { hours, minutes } = calculateTimeFromYPosition(
+            pointerPosition.clientY,
+            containerRect,
+            scrollTop
         );
 
-        if (collidingEvents.length > 0) {
-            // Push colliding events down
-            const updatedEvents = events.map(e => {
-                if (collidingEvents.find(ce => ce.id === e.id)) {
-                    const pushDuration = newEnd.getTime() - e.start.getTime();
-                    return {
-                        ...e,
-                        start: new Date(e.start.getTime() + pushDuration),
-                        end: new Date(e.end.getTime() + pushDuration)
-                    };
-                }
-                return e;
-            });
+        // Ensure hours are within 0-23 range and minutes within 0-59
+        const clampedHours = Math.max(0, Math.min(23, hours));
+        const clampedMinutes = Math.max(0, Math.min(59, minutes));
 
-            // Update dragged event
-            const finalEvents = updatedEvents.map(e => 
-                e.id === draggedEvent.id
-                    ? { ...draggedEvent, start: newStart, end: newEnd }
-                    : e
-            );
+        // Create new start date
+        const newStart = setMinutes(setHours(date, clampedHours), clampedMinutes);
+        const newEnd = new Date(newStart.getTime() + duration);
 
-            setEvents(finalEvents);
-            finalEvents.forEach(e => {
-                if (e.id === draggedEvent.id || collidingEvents.find(ce => ce.id === e.id)) {
-                    onUpdateEvent?.(e);
-                }
-            });
-        } else {
-            // No collisions, just update the dragged event
-            const updatedEvent = {
-                ...draggedEvent,
-                start: newStart,
-                end: newEnd,
-            };
-            
-            onUpdateEvent?.(updatedEvent);
-        }
+        // Update the event
+        const updatedEvent = {
+            ...draggedEvent,
+            start: newStart,
+            end: newEnd,
+        };
+
+        console.log('Updating event:', {
+            originalStart: draggedEvent.start,
+            newStart,
+            originalEnd: draggedEvent.end,
+            newEnd,
+        });
+
+        setEvents(events.map(e => e.id === draggedEvent.id ? updatedEvent : e));
+        onUpdateEvent?.(updatedEvent);
     };
 
     if (view !== 'day') return null;
@@ -110,7 +102,7 @@ export const CalendarDayView = () => {
 
     return (
         <DndContext
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
@@ -118,50 +110,48 @@ export const CalendarDayView = () => {
             <div className="flex relative pt-2 overflow-auto h-full">
                 <TimeTable />
                 <div className="flex-1">
-                    <SortableContext items={events.map(e => e.id)} strategy={rectSortingStrategy}>
-                        {hours.map((hour) => (
-                            <div
-                                key={hour.toString()}
-                                className="relative"
-                                onClick={() => handleTimeClick(hour)}
-                                role="button"
-                                tabIndex={0}
-                                id={hour.toISOString()}
-                                data-type="hour"
-                            >
-                                <div className="h-20 border-t last:border-b">
-                                    {events
-                                        .filter(
-                                            (event) =>
-                                                isSameDay(event.start, dayStart) &&
-                                                isSameHour(event.start, hour) &&
-                                                selectedPersonIds.includes(event.personId)
-                                        )
-                                        .map((event) => {
-                                            const person = people.find((p) => p.id === event.personId);
-                                            const startMinutes = event.start.getMinutes();
-                                            const duration = (event.end.getTime() - event.start.getTime()) / (60 * 60 * 1000);
-                                            
-                                            return (
-                                                <DraggableEvent
-                                                    key={event.id}
-                                                    event={event}
-                                                    person={person}
-                                                    view="day"
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: `${(startMinutes / 60) * 100}%`,
-                                                        left: 0,
-                                                        right: 0,
-                                                        height: `${duration * 100}%`,
-                                                    }}
-                                                />
-                                            );
-                                        })}
-                                </div>
+                    {hours.map((hour) => (
+                        <div
+                            key={hour.toString()}
+                            className="relative"
+                            onClick={() => handleTimeClick(hour)}
+                            role="button"
+                            tabIndex={0}
+                            id={hour.toISOString()}
+                            data-type="hour"
+                        >
+                            <div className="h-20 border-t last:border-b">
+                                {events
+                                    .filter(
+                                        (event) =>
+                                            isSameDay(event.start, dayStart) &&
+                                            isSameHour(event.start, hour) &&
+                                            selectedPersonIds.includes(event.personId)
+                                    )
+                                    .map((event) => {
+                                        const person = people.find((p) => p.id === event.personId);
+                                        const startMinutes = event.start.getMinutes();
+                                        const duration = (event.end.getTime() - event.start.getTime()) / (60 * 60 * 1000);
+                                        
+                                        return (
+                                            <DraggableEvent
+                                                key={event.id}
+                                                event={event}
+                                                person={person}
+                                                view="day"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: `${(startMinutes / 60) * 100}%`,
+                                                    left: 0,
+                                                    right: 0,
+                                                    height: `${duration * 100}%`,
+                                                }}
+                                            />
+                                        );
+                                    })}
                             </div>
-                        ))}
-                    </SortableContext>
+                        </div>
+                    ))}
                 </div>
             </div>
         </DndContext>
